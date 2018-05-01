@@ -49,7 +49,7 @@ Contains hash digests for SHA-1 and SHA-256 with an index 0-23. These hash diges
 
 ### Terminology
 
-This project uses the terms append vs. marshall and parse vs. unmarshall.
+This project uses the terms append vs. marshall and parse vs. unmarshall. The term "Evict Control" means to store a key into NV.
 
 
 
@@ -59,7 +59,7 @@ This example was written for use on Raspberry Pi® 3 or the STM32 with the CubeM
 
 The Raspberry 3 uses the native `spi_dev` interface and defaults to `/dev/spidev0.1`. If you are running the Infineon patches it overrides the kernel SPI interface with their `spi_tis_dev`, which currently causes this demo to fail.
 
-This has only been tested and confirmed working with Rasbian 4.4.x.
+This has only been tested and confirmed working with Rasbian 4.4 and 4.9 (with patch in PR https://github.com/wolfSSL/wolfTPM/pull/10).
 
 ### IO Callback
 
@@ -94,7 +94,7 @@ Build wolfSSL:
 git clone https://github.com/wolfSSL/wolfssl.git
 cd wolfssl
 ./autogen.sh
-./configure --enable-certgen --enable-certreq --enable-certext --enable-pkcs7 --enable-cryptodev
+./configure --enable-certgen --enable-certreq --enable-certext --enable-pkcs7 --enable-cryptodev --enable-aescfb --enable-hkdf CFLAGS="-DHAVE_AES_DECRYPT"
 make
 make check
 sudo make install
@@ -503,7 +503,6 @@ Connection: close
 
 ## Todo
 * Improve overall documentation.
-* Add support for encrypting / decrypting parameters.
 * Add support for SensitiveToPrivate inner and outer.
 * Add `spi_tis_dev` support for Raspberry Pi.
 * Add runtime support for detecting module type ST33 or SLB9670.

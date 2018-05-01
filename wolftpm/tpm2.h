@@ -1563,7 +1563,8 @@ typedef struct TPM2B_CREATION_DATA {
 
 typedef struct TPMS_AUTH_COMMAND {
     TPMI_SH_AUTH_SESSION sessionHandle;
-    TPM2B_NONCE nonce;
+    TPM2B_NONCE nonceCaller;
+    TPM2B_NONCE nonceTpm;
     TPMA_SESSION sessionAttributes;
     TPM2B_AUTH auth;
 
@@ -2706,6 +2707,7 @@ WOLFTPM_API TPM2_CTX* TPM2_GetActiveCtx(void);
 
 WOLFTPM_API int TPM2_GetHashDigestSize(TPMI_ALG_HASH hashAlg);
 WOLFTPM_API int TPM2_GetHashType(TPMI_ALG_HASH hashAlg);
+WOLFTPM_API int TPM2_GetSymmetricBlockSize(TPM_ALG_ID alg, int keySizeInBits);
 WOLFTPM_API int TPM2_GetNonce(byte* nonceBuf, int nonceSz);
 
 WOLFTPM_API void TPM2_SetupPCRSel(TPML_PCR_SELECTION* pcr, TPM_ALG_ID alg,

@@ -413,6 +413,10 @@ int TPM2_Native_Test(void* userCtx)
     sessionHandle = cmdOut.authSes.sessionHandle;
     printf("TPM2_StartAuthSession: sessionHandle 0x%x\n", sessionHandle);
 
+    /* Get session nonce */
+    session[0].nonceTpm.size = cmdOut.authSes.nonceTPM.size;
+    XMEMCPY(session[0].nonceTpm.buffer, cmdOut.authSes.nonceTPM.buffer, cmdOut.authSes.nonceTPM.size);
+
 
     /* Policy Get Digest */
     XMEMSET(&cmdIn.policyGetDigest, 0, sizeof(cmdIn.policyGetDigest));

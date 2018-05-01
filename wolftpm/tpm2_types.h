@@ -87,6 +87,10 @@ typedef int64_t  INT64;
     #ifdef WOLF_CRYPTO_DEV
         #include <wolfssl/wolfcrypt/cryptodev.h>
     #endif
+    #include <wolfssl/wolfcrypt/aes.h>
+    #include <wolfssl/wolfcrypt/wc_encrypt.h>
+    #include <wolfssl/wolfcrypt/pwdbased.h>
+    #include <wolfssl/wolfcrypt/hmac.h>
 #else
 
     #include <stdio.h>

@@ -30,6 +30,7 @@
 
 static TPM2_CTX* gActiveTPM;
 
+typedef TPM2B_MAX_BUFFER TPM2B;
 
 /******************************************************************************/
 /* --- Local Functions -- */
@@ -56,26 +57,134 @@ static void TPM2_ReleaseLock(TPM2_CTX* ctx)
 }
 
 
+#define MAX_KDF_OUT_BYTES ((AES_MAX_KEY_SIZE/8) + AES_BLOCK_SIZE)
 static int TPM2_Parameter_EncryptDecrypt(int modeMask,
     TPMT_SYM_DEF* symmetric, TPMI_ALG_HASH authHash,
-    const BYTE* keyBuf, int keySz,
-    const BYTE* nonceBuf, int nonceSz,
+    TPM2B_SYM_KEY* key, TPM2B_NONCE* nonceCaller, TPM2B_NONCE* nonceTpm,
     BYTE* dataBuf, int dataSz)
 {
-    /* TODO: Perform symmetric encrypt or decrypt */
+#if 0
+    byte kdfOut[MAX_KDF_OUT_BYTES];
+#endif
+    int keySizeInBits;
+    int keySymSz;
+    int blockSz;
+
+    if (symmetric == NULL) {
+        return BAD_FUNC_ARG;
+    }
+
+    /* calculate key size */
+    keySizeInBits = symmetric->keyBits.aes;
+    keySymSz = (keySizeInBits + 7) / 8; /* round up to nearest 8 */
+    blockSz = TPM2_GetSymmetricBlockSize(symmetric->algorithm, symmetric->keyBits.aes);
+
+    //symmetric->algorithm = TPM_ALG_AES;
+    //symmetric->keyBits.aes = 128;
+    //symmetric->mode.aes = TPM_ALG_CFB;
+
+    /* Perform symmetric encrypt or decrypt */
     if (modeMask & TPMA_SESSION_encrypt) {
         /* encrypt */
+
+#if 0
+        // KDF output buffer
+        // It contains parameters for the CFB encryption
+        BYTE             symParmString[MAX_SYM_KEY_BYTES + MAX_SYM_BLOCK_SIZE];
+
+        TPM2B_IV         iv;
+
+        iv.size = CryptGetSymmetricBlockSize(symAlg, keySizeInBits);
+        // See if there is any encryption to do
+        if(iv.size > 0)
+        {
+            // Generate key and iv
+            ret = TPM2_KDFa(authHash, key, "CFB", nonceCaller, nonceTpm,
+                      keySizeInBits + (blockSz * 8), kdfOut, NULL, 0);
+
+            int TPM2_KDFa(
+    TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
+    TPM2B       *key,           // IN: HMAC key
+    const char  *label,         // IN: a 0-byte terminated label used in KDF
+    TPM2B       *contextU,      // IN: context U
+    TPM2B       *contextV,      // IN: context V
+    UINT32       sizeInBits,    // IN: size of generated key in bits
+    BYTE        *keyStream,     // OUT: key buffer
+    UINT32      *counterInOut,  // IN/OUT: caller may provide the iteration counter
+                                //         for incremental operations to avoid
+                                //         large intermediate buffers.
+    BOOL         once           // IN: TRUE if only one iteration is performed
+                                //     FALSE if iteration count determined by
+                                //     "sizeInBits"
+
+UINT16
+_cpri__KDFa(
+    TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
+    TPM2B       *key,           // IN: HMAC key
+    const char  *label,         // IN: a 0-byte terminated label used in KDF
+    TPM2B       *contextU,      // IN: context U
+    TPM2B       *contextV,      // IN: context V
+    UINT32       sizeInBits,    // IN: size of generated key in bits
+    BYTE        *keyStream,     // OUT: key buffer
+    UINT32      *counterInOut,  // IN/OUT: caller may provide the iteration counter
+                                //         for incremental operations to avoid
+                                //         large intermediate buffers.
+    BOOL         once           // IN: TRUE if only one iteration is performed
+                                //     FALSE if iteration count determined by
+                                //     "sizeInBits"
+)
+
+            int wc_PBKDF2(byte* output, const byte* passwd, int pLen, const byte* salt,
+           int sLen, int iterations, int kLen, int hashType)
+
+
+
+            XMEMCPY(iv.t.buffer, &symParmString[keySize], iv.t.size);
+
+            CryptSymmetricEncrypt(data, symAlg, keySizeInBits, TPM_ALG_CFB,
+                                  symParmString, &iv, dataSize, data);
+
+            WOLFSSL_API int wc_AesCfbEncrypt(Aes* aes, byte* out,
+                                    const byte* in, word32 sz);
+
+        }
+#endif
     }
     else {
         /* decrypt */
+
+#if 0
+        // KDF output buffer
+        // It contains parameters for the CFB encryption
+        // From MSB to LSB, they are the key and iv
+        BYTE             symParmString[MAX_SYM_KEY_BYTES + MAX_SYM_BLOCK_SIZE];
+        // Symmetric key size in byte
+        UINT16           keySize = (keySizeInBits + 7) / 8;
+        TPM2B_IV         iv;
+
+        iv.t.size = CryptGetSymmetricBlockSize(symAlg, keySizeInBits);
+        // If there is decryption to do...
+        if(iv.t.size > 0)
+        {
+            // Generate key and iv
+            CryptKDFa(hash, key, "CFB", nonceTpm, nonceCaller,
+                      keySizeInBits + (iv.t.size * 8), symParmString, NULL);
+            XMEMCPY(iv.t.buffer, &symParmString[keySize], iv.t.size);
+
+            CryptSymmetricDecrypt(data, symAlg, keySizeInBits, TPM_ALG_CFB,
+                                  symParmString, &iv, dataSize, data);
+
+            WOLFSSL_API int wc_AesCfbDecrypt(Aes* aes, byte* out,
+                                    const byte* in, word32 sz);
+        }
+#endif
     }
 
     (void)symmetric;
     (void)authHash;
-    (void)keyBuf;
-    (void)keySz;
-    (void)nonceBuf;
-    (void)nonceSz;
+    (void)key;
+    (void)nonceCaller;
+    (void)nonceTpm;
     (void)dataBuf;
     (void)dataSz;
 
@@ -118,8 +227,8 @@ static TPM_RC TPM2_SendCommandAuth(TPM2_CTX* ctx, TPM2_Packet* packet,
             if (auth->sessionAttributes & TPMA_SESSION_decrypt) {
                 /* get new nonce if required */
                 if (ctx->authCmd->sessionHandle !=
-                                            TPM_RS_PW && auth->nonce.size > 0) {
-                    rc = TPM2_GetNonce(auth->nonce.buffer, auth->nonce.size);
+                                            TPM_RS_PW && auth->nonceTpm.size > 0) {
+                    rc = TPM2_GetNonce(auth->nonceTpm.buffer, auth->nonceTpm.size);
                     if (rc != 0)
                         return rc;
                 }
@@ -144,8 +253,9 @@ static TPM_RC TPM2_SendCommandAuth(TPM2_CTX* ctx, TPM2_Packet* packet,
                 rc = TPM2_Parameter_EncryptDecrypt(TPMA_SESSION_encrypt,
                     &auth->symmetric,
                     auth->authHash,
-                    key.buffer, key.size,
-                    auth->nonce.buffer, auth->nonce.size,
+                    &key,
+                    &auth->nonceTpm,
+                    &auth->nonceCaller,
                     param, paramSz);
                 if (rc != 0)
                     return rc;
@@ -201,8 +311,9 @@ static TPM_RC TPM2_SendCommandAuth(TPM2_CTX* ctx, TPM2_Packet* packet,
                 rc = TPM2_Parameter_EncryptDecrypt(TPMA_SESSION_decrypt,
                     &auth->symmetric,
                     auth->authHash,
-                    key.buffer, key.size,
-                    auth->nonce.buffer, auth->nonce.size,
+                    &key,
+                    &auth->nonceTpm,
+                    &authResp.nonce,
                     param, paramSz);
                 if (rc != 0)
                     return rc;
@@ -4578,6 +4689,284 @@ int TPM2_GetHashType(TPMI_ALG_HASH hashAlg)
     (void)hashAlg;
     return 0;
 }
+
+int TPM2_GetSymmetricBlockSize(TPM_ALG_ID alg, int keySizeInBits)
+{
+    if (alg == TPM_ALG_AES) {
+        if (keySizeInBits != 0)
+            return AES_BLOCK_SIZE;
+    }
+    return 0;
+}
+
+
+
+int TPM2_KDFa(
+    TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
+    TPM2B       *key,           // IN: HMAC key
+    const char  *label,         // IN: a 0-byte terminated label used in KDF
+    TPM2B       *contextU,      // IN: context U
+    TPM2B       *contextV,      // IN: context V
+    word32       sizeInBits,    // IN: size of generated key in bits
+    byte        *keyStream,     // OUT: key buffer
+    word32      *counterInOut,  // IN/OUT: caller may provide the iteration counter
+                                //         for incremental operations to avoid
+                                //         large intermediate buffers.
+    int         doOnce          // IN: TRUE if only one iteration is performed
+                                //     FALSE if iteration count determined by
+                                //     "sizeInBits"
+);
+
+// This function performs the key generation according to Part 1 of the
+// TPM specification.
+//
+// This function returns the number of bytes generated which may be zero.
+//
+// The 'key' and 'keyStream' pointers are not allowed to be NULL. The other
+// pointer values may be NULL. The value of 'sizeInBits' must be no larger
+// than (2^18)-1 = 256K bits (32385 bytes).
+//
+// The "once" parameter is set to allow incremental generation of a large
+// value. If this flag is TRUE, "sizeInBits" will be used in the HMAC computation
+// but only one iteration of the KDF is performed. This would be used for
+// XOR obfuscation so that the mask value can be generated in digest-sized
+// chunks rather than having to be generated all at once in an arbitrarily
+// large buffer and then XORed into the result. If "once" is TRUE, then
+// "sizeInBits" must be a multiple of 8.
+//
+// Any error in the processing of this command is considered fatal.
+//  return type: CRYPT_RESULT
+//     0            hash algorithm is not supported or is TPM_ALG_NULL
+//    > 0           the number of bytes in the 'keyStream' buffer
+int TPM2_KDFa(
+    TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
+    TPM2B       *key,           // IN: HMAC key
+    const char  *label,         // IN: a 0-byte terminated label used in KDF
+    TPM2B       *contextU,      // IN: context U
+    TPM2B       *contextV,      // IN: context V
+    word32       sizeInBits,    // IN: size of generated key in bits
+    byte        *keyStream,     // OUT: key buffer
+    word32      *counterInOut,  // IN/OUT: caller may provide the iteration counter
+                                //         for incremental operations to avoid
+                                //         large intermediate buffers.
+    int         doOnce          // IN: TRUE if only one iteration is performed
+                                //     FALSE if iteration count determined by
+                                //     "sizeInBits"
+)
+{
+    int ret;
+    Hmac    hmac;
+    int     hashType;
+    word32  counter = 0;
+    int     lLen = 0;
+    int     hLen;
+    int     outLen;
+    byte    *outStream;
+    byte    uint32Buf[sizeof(UINT32)];
+
+    if (key == NULL || keyStream == NULL)
+        return BAD_FUNC_ARG;
+
+    if (doOnce != FALSE && (sizeInBits & 7) != 0)
+        return BAD_FUNC_ARG;
+
+    hashType = TPM2_GetHashType(hashAlg);
+    if (hashType == WC_HASH_TYPE_NONE)
+        return NOT_COMPILED_IN;
+
+    hLen = TPM2_GetHashDigestSize(hashAlg);
+    if (hLen <= 0)
+        return NOT_COMPILED_IN;
+
+    ret = wc_HmacInit(&hmac, NULL, INVALID_DEVID);
+    if (ret != 0)
+        return ret;
+
+    /* setup counter */
+    counter = (counterInOut != NULL) ? *counterInOut : 0;
+
+    /* get label length if provided */
+    if (label != NULL)
+        lLen = (int)XSTRLEN(label);
+
+    /* generate required bytes */
+    outLen = doOnce ? hLen : ((sizeInBits + 7) / 8);
+    outStream = keyStream;
+    for (; outLen > 0; outLen -= hLen)
+    {
+        if (hLen > outLen)
+            hLen = outLen;
+
+        counter++;
+
+        /* start HMAC */
+        ret = wc_HmacSetKey(&hmac, hashType, &key->buffer[0], key->size);
+        if (ret != 0)
+            break;
+
+        /* add counter */
+        TPM2_Packet_U32ToByteArray(counter, uint32Buf);
+        ret = wc_HmacUpdate(&hmac, uint32Buf, (word32)sizeof(uint32Buf));
+        if (ret != 0)
+            break;
+
+        /* add label */
+        if (label != NULL) {
+            ret = wc_HmacUpdate(&hmac, (byte*)label, lLen);
+            if (ret != 0)
+                break;
+        }
+
+        /* add contextU */
+        if (contextU != NULL) {
+            ret = wc_HmacUpdate(&hmac, contextU->buffer, contextU->size);
+            if (ret != 0)
+                break;
+        }
+
+        /* add contextV */
+        if (contextV != NULL) {
+            ret = wc_HmacUpdate(&hmac, contextV->buffer, contextV->size);
+            if (ret != 0)
+                break;
+        }
+
+        /* add size in bits */
+        TPM2_Packet_U32ToByteArray(sizeInBits, (byte*)&uint32Buf);
+        ret = wc_HmacUpdate(&hmac, uint32Buf, (word32)sizeof(uint32Buf));
+        if (ret != 0)
+            break;
+
+        /* get result */
+        ret = wc_HmacFinal(&hmac, outStream);
+        if (ret != 0)
+            break;
+
+        outStream = &outStream[hLen];
+    }
+
+    wc_HmacFree(&hmac);
+
+    /* mask off bits if not a multiple of byte size */
+    if ((sizeInBits % 8) != 0)
+        keyStream[0] &= ((1 << (sizeInBits % 8)) - 1);
+
+    /* return counter if provided */
+    if (counterInOut != NULL)
+        *counterInOut = counter;
+
+    /* return length rounded up to nearest 8 multiple */
+    return ((sizeInBits + 7) / 8);
+}
+
+#if 0
+
+// KDFe as defined in TPM specification part 1.
+//
+// This function returns the number of bytes generated which may be zero.
+//
+// The 'Z' and 'keyStream' pointers are not allowed to be NULL. The other
+// pointer values may be NULL. The value of 'sizeInBits' must be no larger
+// than (2^18)-1 = 256K bits (32385 bytes).
+// Any error in the processing of this command is considered fatal.
+//  return type: CRYPT_RESULT
+//     0            hash algorithm is not supported or is TPM_ALG_NULL
+//    > 0           the number of bytes in the 'keyStream' buffer
+//
+UINT16 TPM2_KDFe(
+    TPM_ALG_ID       hashAlg,           // IN: hash algorithm used in HMAC
+    TPM2B           *Z,                 // IN: Z
+    const char      *label,             // IN: a 0 terminated label using in KDF
+    TPM2B           *partyUInfo,        // IN: PartyUInfo
+    TPM2B           *partyVInfo,        // IN: PartyVInfo
+    UINT32           sizeInBits,        // IN: size of generated key in bits
+    BYTE            *keyStream          // OUT: key buffer
+)
+{
+    UINT32       counter = 0;       // counter value
+    UINT32       lSize = 0;
+    BYTE        *stream = keyStream;
+    CPRI_HASH_STATE         hashState;
+    INT16        hLen = (INT16) _cpri__GetDigestSize(hashAlg);
+    INT16        bytes;             // number of bytes to generate
+    BYTE         uint32Buf[4];
+
+    pAssert(   keyStream != NULL
+               && Z != NULL
+               && ((sizeInBits + 7) / 8) < INT16_MAX);
+
+    if(hLen == 0)
+        return 0;
+
+    bytes = (INT16)((sizeInBits + 7) / 8);
+
+    // Prepare label buffer.  Calculate its size and keep the last 0 byte
+    if(label != NULL)
+        for(lSize = 0; label[lSize++] != 0;);
+
+    // Generate required bytes
+    //The inner loop of that KDF uses:
+    //  Hashi := H(counter | Z | OtherInfo) (5)
+    // Where:
+    //  Hashi   the hash generated on the i-th iteration of the loop.
+    //  H()     an approved hash function
+    //  counter a 32-bit counter that is initialized to 1 and incremented
+    //          on each iteration
+    //  Z       the X coordinate of the product of a public ECC key and a
+    //          different private ECC key.
+    //  OtherInfo   a collection of qualifying data for the KDF defined below.
+    //  In this specification, OtherInfo will be constructed by:
+    //      OtherInfo := Use | PartyUInfo  | PartyVInfo
+    for (; bytes > 0; stream = &stream[hLen], bytes = bytes - hLen)
+    {
+        if(bytes < hLen)
+            hLen = bytes;
+
+        counter++;
+        // Start hash
+        if(_cpri__StartHash(hashAlg, FALSE,  &hashState) == 0)
+            return 0;
+
+        // Add counter
+        UINT32_TO_BYTE_ARRAY(counter, uint32Buf);
+        _cpri__UpdateHash(&hashState, sizeof(UINT32), uint32Buf);
+
+        // Add Z
+        if(Z != NULL)
+            _cpri__UpdateHash(&hashState, Z->size, Z->buffer);
+
+        // Add label
+        if(label != NULL)
+            _cpri__UpdateHash(&hashState, lSize, (BYTE *)label);
+        else
+
+            // The SP800-108 specification requires a zero between the label
+            // and the context.
+            _cpri__UpdateHash(&hashState, 1, (BYTE *)"");
+
+        // Add PartyUInfo
+        if(partyUInfo != NULL)
+            _cpri__UpdateHash(&hashState, partyUInfo->size, partyUInfo->buffer);
+
+        // Add PartyVInfo
+        if(partyVInfo != NULL)
+            _cpri__UpdateHash(&hashState, partyVInfo->size, partyVInfo->buffer);
+
+        // Compute Hash. hLen was changed to be the smaller of bytes or hLen
+        // at the start of each iteration.
+        _cpri__CompleteHash(&hashState, hLen, stream);
+    }
+
+    // Mask off bits if the required bits is not a multiple of byte size
+    if((sizeInBits % 8) != 0)
+        keyStream[0] &= ((1 << (sizeInBits % 8)) - 1);
+
+    return (CRYPT_RESULT)((sizeInBits + 7) / 8);
+
+}
+
+#endif
+
 
 int TPM2_GetNonce(byte* nonceBuf, int nonceSz)
 {

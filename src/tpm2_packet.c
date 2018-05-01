@@ -102,6 +102,35 @@
 #endif
 
 
+/* convert 16 bit integer to opaque */
+static inline void c16toa(word16 wc_u16, byte* c)
+{
+    c[0] = (wc_u16 >> 8) & 0xff;
+    c[1] =  wc_u16 & 0xff;
+}
+/* convert 32 bit integer to opaque */
+static inline void c32toa(word32 wc_u32, byte* c)
+{
+    c[0] = (wc_u32 >> 24) & 0xff;
+    c[1] = (wc_u32 >> 16) & 0xff;
+    c[2] = (wc_u32 >>  8) & 0xff;
+    c[3] =  wc_u32 & 0xff;
+}
+
+#if 0
+/* convert opaque to 16 bit integer */
+static inline void ato16(const byte* c, word16* wc_u16)
+{
+    *wc_u16 = (word16) ((c[0] << 8) | (c[1]));
+}
+/* convert opaque to 32 bit integer */
+static inline void ato32(const byte* c, word32* wc_u32)
+{
+    *wc_u32 = (c[0] << 24) | (c[1] << 16) | (c[2] << 8) | c[3];
+}
+#endif
+
+
 /******************************************************************************/
 /* --- BEGIN TPM Packet Assembly / Parsing -- */
 /******************************************************************************/
@@ -113,6 +142,17 @@ UINT32 TPM2_Packet_SwapU32(UINT32 data) {
 }
 UINT64 TPM2_Packet_SwapU64(UINT64 data) {
     return cpu_to_be64(data);
+}
+
+void TPM2_Packet_U16ToByteArray(UINT16 val, BYTE* b)
+{
+    if (b)
+        c16toa(val, b);
+}
+void TPM2_Packet_U32ToByteArray(UINT32 val, BYTE* b)
+{
+    if (b)
+        c32toa(val, b);
 }
 
 void TPM2_Packet_Init(TPM2_CTX* ctx, TPM2_Packet* packet)
@@ -305,8 +345,8 @@ void TPM2_Packet_AppendAuth(TPM2_Packet* packet, TPMS_AUTH_COMMAND* auth)
 
     TPM2_Packet_AppendU32(packet, auth->sessionHandle);
 
-    TPM2_Packet_AppendU16(packet, auth->nonce.size);
-    TPM2_Packet_AppendBytes(packet, auth->nonce.buffer, auth->nonce.size);
+    TPM2_Packet_AppendU16(packet, auth->nonceTpm.size);
+    TPM2_Packet_AppendBytes(packet, auth->nonceTpm.buffer, auth->nonceTpm.size);
     TPM2_Packet_AppendU8(packet, auth->sessionAttributes);
     TPM2_Packet_AppendU16(packet, auth->auth.size);
     TPM2_Packet_AppendBytes(packet, auth->auth.buffer, auth->auth.size);
