@@ -346,6 +346,40 @@ int wolfTPM2_LoadPublicKey(WOLFTPM2_DEV* dev, WOLFTPM2_KEY* key,
     return rc;
 }
 
+int wolfTPM2_LoadPrivateKey(WOLFTPM2_DEV* dev, WOLFTPM2_KEY* key,
+    const TPM2B_PUBLIC* pub, const TPM2B_SENSITIVE* pvt)
+{
+    int rc;
+    LoadExternal_In  loadExtIn;
+    LoadExternal_Out loadExtOut;
+
+    if (dev == NULL || key == NULL || pub == NULL || pvt == NULL)
+        return BAD_FUNC_ARG;
+
+    /* Loading public key */
+    XMEMSET(&loadExtIn, 0, sizeof(loadExtIn));
+    loadExtIn.inPublic = *pub;
+    loadExtIn.inPrivate = *pvt;
+    loadExtIn.hierarchy = TPM_RH_NULL;
+    rc = TPM2_LoadExternal(&loadExtIn, &loadExtOut);
+    if (rc != TPM_RC_SUCCESS) {
+    #ifdef DEBUG_WOLFTPM
+        printf("TPM2_LoadExternal: failed %d: %s\n", rc,
+            wolfTPM2_GetRCString(rc));
+    #endif
+        return rc;
+    }
+    key->handle.dev = dev;
+    key->handle.hndl = loadExtOut.objectHandle;
+    key->pub = loadExtIn.inPublic;
+
+#ifdef DEBUG_WOLFTPM
+    printf("TPM2_LoadExternal: 0x%x\n", (word32)loadExtOut.objectHandle);
+#endif
+
+    return rc;
+}
+
 int wolfTPM2_LoadRsaPublicKey(WOLFTPM2_DEV* dev, WOLFTPM2_KEY* key,
     const byte* rsaPub, word32 rsaPubSz, word32 exponent)
 {
@@ -383,6 +417,38 @@ int wolfTPM2_LoadRsaPublicKey(WOLFTPM2_DEV* dev, WOLFTPM2_KEY* key,
     XMEMCPY(pub.publicArea.unique.rsa.buffer, rsaPub, rsaPubSz);
 
     return wolfTPM2_LoadPublicKey(dev, key, &pub);
+}
+
+int wolfTPM2_LoadRsaPrivateKey(WOLFTPM2_DEV* dev, WOLFTPM2_KEY* key,
+    const byte* rsaPub, word32 rsaPubSz, word32 exponent)
+{
+    TPM2B_PUBLIC pub;
+    TPM2B_SENSITIVE pvt;
+
+    if (dev == NULL || key == NULL || rsaPub == NULL)
+        return BAD_FUNC_ARG;
+    if (rsaPubSz > sizeof(pub.publicArea.unique.rsa.buffer))
+        return BUFFER_E;
+
+    /* Set up public key */
+    XMEMSET(&pub, 0, sizeof(pub));
+    pub.publicArea.type = TPM_ALG_RSA;
+    pub.publicArea.nameAlg = TPM_ALG_NULL;
+    pub.publicArea.objectAttributes = TPMA_OBJECT_decrypt;
+    pub.publicArea.parameters.rsaDetail.symmetric.algorithm = TPM_ALG_NULL;
+    pub.publicArea.parameters.rsaDetail.keyBits = rsaPubSz * 8;
+    pub.publicArea.parameters.rsaDetail.exponent = exponent;
+    pub.publicArea.parameters.rsaDetail.scheme.scheme = TPM_ALG_NULL;
+    pub.publicArea.unique.rsa.size = rsaPubSz;
+    XMEMCPY(pub.publicArea.unique.rsa.buffer, rsaPub, rsaPubSz);
+
+    /* Set up private key */
+    XMEMSET(&pvt, 0, sizeof(pvt));
+    pvt.sensitiveArea.sensitiveType = TPM_ALG_RSA;
+    //TODO: get unsigned bin from RsaKey
+    XMEMCPY(pvt.sensitiveArea.sensitive.rsa.buffer, rsaPub, rsaPubSz);
+
+    return wolfTPM2_LoadPrivateKey(dev, key, &pub, &pvt);
 }
 
 int wolfTPM2_LoadEccPublicKey(WOLFTPM2_DEV* dev, WOLFTPM2_KEY* key, int curveId,
