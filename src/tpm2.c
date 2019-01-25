@@ -35,6 +35,23 @@ typedef TPM2B_MAX_BUFFER TPM2B;
 /******************************************************************************/
 /* --- Local Functions -- */
 /******************************************************************************/
+
+int TPM2_KDFa(
+    TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
+    TPM2B       *key,           // IN: HMAC key
+    const char  *label,         // IN: a 0-byte terminated label used in KDF
+    TPM2B       *contextU,      // IN: context U
+    TPM2B       *contextV,      // IN: context V
+    word32       sizeInBits,    // IN: size of generated key in bits
+    byte        *keyStream,     // OUT: key buffer
+    word32      *counterInOut,  // IN/OUT: caller may provide the iteration counter
+                                //         for incremental operations to avoid
+                                //         large intermediate buffers.
+    int         doOnce          // IN: TRUE if only one iteration is performed
+                                //     FALSE if iteration count determined by
+                                //     "sizeInBits"
+);
+
 static TPM_RC TPM2_AcquireLock(TPM2_CTX* ctx)
 {
 #if defined(WOLFTPM2_NO_WOLFCRYPT) || defined(SINGLE_THREADED)
@@ -63,9 +80,8 @@ static int TPM2_Parameter_EncryptDecrypt(int modeMask,
     TPM2B_SYM_KEY* key, TPM2B_NONCE* nonceCaller, TPM2B_NONCE* nonceTpm,
     BYTE* dataBuf, int dataSz)
 {
-#if 0
+    int ret = BAD_FUNC_ARG;
     byte kdfOut[MAX_KDF_OUT_BYTES];
-#endif
     int keySizeInBits;
     int keySymSz;
     int blockSz;
@@ -87,6 +103,12 @@ static int TPM2_Parameter_EncryptDecrypt(int modeMask,
     if (modeMask & TPMA_SESSION_encrypt) {
         /* encrypt */
 
+        if (blockSz > 0) {
+
+            // Generate key and iv
+            ret = TPM2_KDFa(authHash, (TPM2B*)key, "CFB", (TPM2B*)nonceCaller, (TPM2B*)nonceTpm,
+                      keySizeInBits + (blockSz * 8), kdfOut, NULL, 0);
+        }
 #if 0
         // KDF output buffer
         // It contains parameters for the CFB encryption
@@ -102,7 +124,7 @@ static int TPM2_Parameter_EncryptDecrypt(int modeMask,
             ret = TPM2_KDFa(authHash, key, "CFB", nonceCaller, nonceTpm,
                       keySizeInBits + (blockSz * 8), kdfOut, NULL, 0);
 
-            int TPM2_KDFa(
+int TPM2_KDFa(
     TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
     TPM2B       *key,           // IN: HMAC key
     const char  *label,         // IN: a 0-byte terminated label used in KDF
@@ -135,9 +157,7 @@ _cpri__KDFa(
 )
 
             int wc_PBKDF2(byte* output, const byte* passwd, int pLen, const byte* salt,
-           int sLen, int iterations, int kLen, int hashType)
-
-
+            int sLen, int iterations, int kLen, int hashType)
 
             XMEMCPY(iv.t.buffer, &symParmString[keySize], iv.t.size);
 
@@ -187,8 +207,9 @@ _cpri__KDFa(
     (void)nonceTpm;
     (void)dataBuf;
     (void)dataSz;
+    (void)keySymSz;
 
-    return 0;
+    return ret;
 }
 
 /* Send Command Wrapper */
@@ -4699,24 +4720,6 @@ int TPM2_GetSymmetricBlockSize(TPM_ALG_ID alg, int keySizeInBits)
     return 0;
 }
 
-
-
-int TPM2_KDFa(
-    TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
-    TPM2B       *key,           // IN: HMAC key
-    const char  *label,         // IN: a 0-byte terminated label used in KDF
-    TPM2B       *contextU,      // IN: context U
-    TPM2B       *contextV,      // IN: context V
-    word32       sizeInBits,    // IN: size of generated key in bits
-    byte        *keyStream,     // OUT: key buffer
-    word32      *counterInOut,  // IN/OUT: caller may provide the iteration counter
-                                //         for incremental operations to avoid
-                                //         large intermediate buffers.
-    int         doOnce          // IN: TRUE if only one iteration is performed
-                                //     FALSE if iteration count determined by
-                                //     "sizeInBits"
-);
-
 // This function performs the key generation according to Part 1 of the
 // TPM specification.
 //
@@ -4790,7 +4793,7 @@ int TPM2_KDFa(
         lLen = (int)XSTRLEN(label);
 
     /* generate required bytes */
-    outLen = doOnce ? hLen : ((sizeInBits + 7) / 8);
+    outLen = doOnce ? hLen : (((int)sizeInBits + 7) / 8);
     outStream = keyStream;
     for (; outLen > 0; outLen -= hLen)
     {
