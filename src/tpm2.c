@@ -103,72 +103,34 @@ static int TPM2_Parameter_EncryptDecrypt(int modeMask,
     if (modeMask & TPMA_SESSION_encrypt) {
         /* encrypt */
 
-        if (blockSz > 0) {
+        if (symmetric->algorithm == TPM_ALG_XOR) {
 
-            // Generate key and iv
-            ret = TPM2_KDFa(authHash, (TPM2B*)key, "CFB", (TPM2B*)nonceCaller, (TPM2B*)nonceTpm,
-                      keySizeInBits + (blockSz * 8), kdfOut, NULL, 0);
-        }
 #if 0
-        // KDF output buffer
-        // It contains parameters for the CFB encryption
-        BYTE             symParmString[MAX_SYM_KEY_BYTES + MAX_SYM_BLOCK_SIZE];
-
-        TPM2B_IV         iv;
-
-        iv.size = CryptGetSymmetricBlockSize(symAlg, keySizeInBits);
-        // See if there is any encryption to do
-        if(iv.size > 0)
-        {
-            // Generate key and iv
-            ret = TPM2_KDFa(authHash, key, "CFB", nonceCaller, nonceTpm,
-                      keySizeInBits + (blockSz * 8), kdfOut, NULL, 0);
-
-int TPM2_KDFa(
-    TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
-    TPM2B       *key,           // IN: HMAC key
-    const char  *label,         // IN: a 0-byte terminated label used in KDF
-    TPM2B       *contextU,      // IN: context U
-    TPM2B       *contextV,      // IN: context V
-    UINT32       sizeInBits,    // IN: size of generated key in bits
-    BYTE        *keyStream,     // OUT: key buffer
-    UINT32      *counterInOut,  // IN/OUT: caller may provide the iteration counter
-                                //         for incremental operations to avoid
-                                //         large intermediate buffers.
-    BOOL         once           // IN: TRUE if only one iteration is performed
-                                //     FALSE if iteration count determined by
-                                //     "sizeInBits"
-
-UINT16
-_cpri__KDFa(
-    TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
-    TPM2B       *key,           // IN: HMAC key
-    const char  *label,         // IN: a 0-byte terminated label used in KDF
-    TPM2B       *contextU,      // IN: context U
-    TPM2B       *contextV,      // IN: context V
-    UINT32       sizeInBits,    // IN: size of generated key in bits
-    BYTE        *keyStream,     // OUT: key buffer
-    UINT32      *counterInOut,  // IN/OUT: caller may provide the iteration counter
-                                //         for incremental operations to avoid
-                                //         large intermediate buffers.
-    BOOL         once           // IN: TRUE if only one iteration is performed
-                                //     FALSE if iteration count determined by
-                                //     "sizeInBits"
-)
-
-            int wc_PBKDF2(byte* output, const byte* passwd, int pLen, const byte* salt,
-            int sLen, int iterations, int kLen, int hashType)
-
-            XMEMCPY(iv.t.buffer, &symParmString[keySize], iv.t.size);
-
-            CryptSymmetricEncrypt(data, symAlg, keySizeInBits, TPM_ALG_CFB,
-                                  symParmString, &iv, dataSize, data);
-
-            WOLFSSL_API int wc_AesCfbEncrypt(Aes* aes, byte* out,
-                                    const byte* in, word32 sz);
-
-        }
+            // XOR parameter encryption formulation:
+            //    XOR(parameter, hash, sessionAuth, nonceNewer, nonceOlder)
+            CryptXORObfuscation(session->authHashAlg,
+                                &(key.b),
+                                nonceCaller,
+                                &(session->nonceTPM.b),
+                                cipherSize,
+                                buffer);
 #endif
+        }
+        else {
+            if (blockSz > 0) {
+                // Generate key and iv
+                ret = TPM2_KDFa(authHash, (TPM2B*)key, "CFB", (TPM2B*)nonceCaller, (TPM2B*)nonceTpm,
+                          keySizeInBits + (blockSz * 8), kdfOut, NULL, 0);
+
+#if 0
+                XMEMCPY(iv.t.buffer, &symParmString[keySize], iv.t.size);
+
+
+                WOLFSSL_API int wc_AesCfbEncrypt(Aes* aes, byte* out,
+                                        const byte* in, word32 sz);
+#endif
+            }
+        }
     }
     else {
         /* decrypt */
