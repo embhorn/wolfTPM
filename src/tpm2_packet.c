@@ -395,7 +395,23 @@ void TPM2_Packet_AppendSymmetric(TPM2_Packet* packet, TPMT_SYM_DEF* symmetric)
     TPM2_Packet_AppendU16(packet, symmetric->algorithm);
     if (symmetric->algorithm != TPM_ALG_NULL) {
         TPM2_Packet_AppendU16(packet, symmetric->keyBits.sym);
-        TPM2_Packet_AppendU16(packet, symmetric->mode.sym);
+        switch(symmetric->algorithm) {
+#ifdef TPM_ALG_AES
+            case TPM_ALG_AES:
+                TPM2_Packet_AppendU16(packet, symmetric->mode.sym);
+//                return TPMI_ALG_SYM_MODE_Marshal((TPMI_ALG_SYM_MODE *)&(source->aes), buffer, size);
+#endif
+#ifdef TPM_ALG_SM4
+            case TPM_ALG_SM4:
+                TPM2_Packet_AppendU16(packet, symmetric->mode.sym);
+//                return TPMI_ALG_SYM_MODE_Marshal((TPMI_ALG_SYM_MODE *)&(source->SM4), buffer, size);
+#endif
+#ifdef TPM_ALG_XOR
+            case TPM_ALG_XOR:
+#endif
+            case TPM_ALG_NULL:
+                break;
+        }
     }
 }
 void TPM2_Packet_ParseSymmetric(TPM2_Packet* packet, TPMT_SYM_DEF* symmetric)

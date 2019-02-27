@@ -36,7 +36,7 @@ typedef TPM2B_MAX_BUFFER TPM2B;
 /* --- Local Functions -- */
 /******************************************************************************/
 
-int TPM2_KDFa(
+static int TPM2_KDFa(
     TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
     TPM2B       *key,           // IN: HMAC key
     const char  *label,         // IN: a 0-byte terminated label used in KDF
@@ -4703,7 +4703,7 @@ int TPM2_GetSymmetricBlockSize(TPM_ALG_ID alg, int keySizeInBits)
 //  return type: CRYPT_RESULT
 //     0            hash algorithm is not supported or is TPM_ALG_NULL
 //    > 0           the number of bytes in the 'keyStream' buffer
-int TPM2_KDFa(
+static int TPM2_KDFa(
     TPM_ALG_ID   hashAlg,       // IN: hash algorithm used in HMAC
     TPM2B       *key,           // IN: HMAC key
     const char  *label,         // IN: a 0-byte terminated label used in KDF
