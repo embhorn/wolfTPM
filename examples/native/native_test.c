@@ -335,24 +335,6 @@ int TPM2_Native_Test(void* userCtx)
     printf("TPM2_StirRandom: success\n");
 
 #if 1
-    /* Sign with ECC key */
-    XMEMSET(&cmdIn.sign, 0, sizeof(cmdIn.sign));
-    cmdIn.sign.keyHandle = eccKey.handle;
-    cmdIn.sign.digest.size = message.size;
-    XMEMCPY(cmdIn.sign.digest.buffer, message.buffer, message.size);
-    cmdIn.sign.inScheme.scheme = TPM_ALG_ECDSA;
-    cmdIn.sign.inScheme.details.ecdsa.hashAlg = TPM_ALG_SHA256;
-    cmdIn.sign.validation.tag = TPM_ST_HASHCHECK;
-    cmdIn.sign.validation.hierarchy = TPM_RH_NULL;
-    rc = TPM2_Sign(&cmdIn.sign, &cmdOut.sign);
-    if (rc != TPM_RC_SUCCESS) {
-        printf("TPM2_Sign failed 0x%x: %s\n", rc, TPM2_GetRCString(rc));
-        goto exit;
-    }
-    printf("TPM2_Sign: ECC S %d, R %d\n",
-        cmdOut.sign.signature.signature.ecdsa.signatureS.size,
-        cmdOut.sign.signature.signature.ecdsa.signatureR.size);
-
 
     /* Start Auth Session with Parameter Encryption */
     XMEMSET(&cmdIn.authSes, 0, sizeof(cmdIn.authSes));
@@ -388,8 +370,25 @@ int TPM2_Native_Test(void* userCtx)
     session[0].sessionAttributes &= ~TPMA_SESSION_continueSession;
 
     /* Enable encryption for this session */
-    session[0].sessionAttributes |= TPMA_SESSION_encrypt;
+    session[0].sessionAttributes |= TPMA_SESSION_decrypt;
 
+
+    /* Sign key */
+    XMEMSET(&cmdIn.sign, 0, sizeof(cmdIn.sign));
+    //cmdIn.sign.keyHandle = eccKey.handle;
+    cmdIn.sign.digest.size = message.size;
+    XMEMCPY(cmdIn.sign.digest.buffer, message.buffer, message.size);
+    cmdIn.sign.inScheme.scheme = TPM_ALG_RSAPSS;
+    cmdIn.sign.inScheme.details.rsapss.hashAlg = TPM_ALG_SHA256;
+    cmdIn.sign.validation.tag = TPM_ST_HASHCHECK;
+    cmdIn.sign.validation.hierarchy = TPM_RH_NULL;
+    rc = TPM2_Sign(&cmdIn.sign, &cmdOut.sign);
+    if (rc != TPM_RC_SUCCESS) {
+        printf("TPM2_Sign failed 0x%x: %s\n", rc, TPM2_GetRCString(rc));
+        goto exit;
+    }
+    printf("TPM2_Sign: RSA S %d\n",
+        cmdOut.sign.signature.signature.rsassa.sig.size);
 
 #endif
 
@@ -469,10 +468,11 @@ int TPM2_Native_Test(void* userCtx)
     sessionHandle = cmdOut.authSes.sessionHandle;
     printf("TPM2_StartAuthSession: sessionHandle 0x%x\n", sessionHandle);
 
+#if 0
     /* Get session nonce */
     session[0].nonceTpm.size = cmdOut.authSes.nonceTPM.size;
     XMEMCPY(session[0].nonceTpm.buffer, cmdOut.authSes.nonceTPM.buffer, cmdOut.authSes.nonceTPM.size);
-
+#endif
 
     /* Policy Get Digest */
     XMEMSET(&cmdIn.policyGetDigest, 0, sizeof(cmdIn.policyGetDigest));

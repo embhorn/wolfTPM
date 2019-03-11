@@ -399,12 +399,10 @@ void TPM2_Packet_AppendSymmetric(TPM2_Packet* packet, TPMT_SYM_DEF* symmetric)
 #ifdef TPM_ALG_AES
             case TPM_ALG_AES:
                 TPM2_Packet_AppendU16(packet, symmetric->mode.sym);
-//                return TPMI_ALG_SYM_MODE_Marshal((TPMI_ALG_SYM_MODE *)&(source->aes), buffer, size);
 #endif
 #ifdef TPM_ALG_SM4
             case TPM_ALG_SM4:
                 TPM2_Packet_AppendU16(packet, symmetric->mode.sym);
-//                return TPMI_ALG_SYM_MODE_Marshal((TPMI_ALG_SYM_MODE *)&(source->SM4), buffer, size);
 #endif
 #ifdef TPM_ALG_XOR
             case TPM_ALG_XOR:
